@@ -14,8 +14,8 @@
 
 ### ✅ Completed (Contract):
 10. **Contract Deployment** - Deployed milestone escrow contract to Stellar Testnet!
-    - Contract ID: `CBBRYWY6ROXCM6AHP4COM3AL6UDPTY66FXF43Q7PNEIPU53RZOGHBYP3`
-    - Explorer: https://stellar.expert/explorer/testnet/contract/CBBRYWY6ROXCM6AHP4COM3AL6UDPTY66FXF43Q7PNEIPU53RZOGHBYP3
+    - Contract ID: `CCQGYRRXPKGLIACYMDKUMUYPJZ4AURVG2XXYYTZK4NQAERPP2KSIKUNO`
+    - Explorer: https://stellar.expert/explorer/testnet/contract/CCQGYRRXPKGLIACYMDKUMUYPJZ4AURVG2XXYYTZK4NQAERPP2KSIKUNO
 
 ### ✅ Completed (Backend):
 11. **Backend Setup** - Created an Express + TypeScript backend in `escrow-backend/`

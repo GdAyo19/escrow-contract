@@ -14,6 +14,8 @@ pub enum Error {
     Unauthorized = 5,
     InvalidMilestone = 6,
     InvalidStatus = 7,
+    TokenNotWhitelisted = 8,
+    TokenAlreadyWhitelisted = 9,
 }
 
 #[contracttype]
@@ -47,6 +49,8 @@ pub struct Job {
 #[contracttype]
 pub enum DataKey {
     Job,
+    Admin,
+    WhitelistedTokens,
 }
 
 #[contracttype]
@@ -92,6 +96,7 @@ pub struct MilestoneEscrow;
 impl MilestoneEscrow {
     pub fn initialize(
         env: Env,
+        admin: Address,
         client: Address,
         freelancer: Address,
         arbiter: Address,
@@ -101,6 +106,12 @@ impl MilestoneEscrow {
         if env.storage().instance().has(&DataKey::Job) {
             return Err(Error::AlreadyInitialized);
         }
+
+        env.storage().instance().set(&DataKey::Admin, &admin);
+        
+        let mut whitelist: Vec<Address> = Vec::new(&env);
+        whitelist.push_back(token.clone());
+        env.storage().instance().set(&DataKey::WhitelistedTokens, &whitelist);
 
         let mut milestones: Vec<Milestone> = Vec::new(&env);
         for amount in milestone_amounts.iter() {
@@ -121,6 +132,63 @@ impl MilestoneEscrow {
 
         env.storage().instance().set(&DataKey::Job, &job);
         Ok(())
+    }
+
+    pub fn add_whitelisted_token(env: Env, admin: Address, token: Address) -> Result<(), Error> {
+        admin.require_auth();
+        
+        let stored_admin: Address = env.storage().instance().get(&DataKey::Admin)
+            .ok_or(Error::NotInitialized)?;
+        
+        if admin != stored_admin {
+            return Err(Error::Unauthorized);
+        }
+        
+        let mut whitelist: Vec<Address> = env.storage().instance().get(&DataKey::WhitelistedTokens)
+            .ok_or(Error::NotInitialized)?;
+        
+        if whitelist.contains(&token) {
+            return Err(Error::TokenAlreadyWhitelisted);
+        }
+        
+        whitelist.push_back(token);
+        env.storage().instance().set(&DataKey::WhitelistedTokens, &whitelist);
+        Ok(())
+    }
+
+    pub fn remove_whitelisted_token(env: Env, admin: Address, token: Address) -> Result<(), Error> {
+        admin.require_auth();
+        
+        let stored_admin: Address = env.storage().instance().get(&DataKey::Admin)
+            .ok_or(Error::NotInitialized)?;
+        
+        if admin != stored_admin {
+            return Err(Error::Unauthorized);
+        }
+        
+        let mut whitelist: Vec<Address> = env.storage().instance().get(&DataKey::WhitelistedTokens)
+            .ok_or(Error::NotInitialized)?;
+        
+        if let Some(index) = whitelist.iter().position(|t| t == token) {
+            whitelist.remove(index as u32);
+            env.storage().instance().set(&DataKey::WhitelistedTokens, &whitelist);
+            Ok(())
+        } else {
+            Err(Error::TokenNotWhitelisted)
+        }
+    }
+
+    pub fn is_token_whitelisted(env: Env, token: Address) -> bool {
+        if let Some(whitelist) = env.storage().instance().get::<_, Vec<Address>>(&DataKey::WhitelistedTokens) {
+            whitelist.contains(&token)
+        } else {
+            false
+        }
+    }
+
+    pub fn get_whitelisted_tokens(env: Env) -> Result<Vec<Address>, Error> {
+        env.storage().instance().get(&DataKey::WhitelistedTokens)
+            .ok_or(Error::NotInitialized)
     }
 
     pub fn fund(env: Env, client: Address) -> Result<(), Error> {
