@@ -4,6 +4,63 @@ use soroban_sdk::{
     testutils::Address as _, testutils::Events, testutils::Ledger, vec, Address, Env, TryIntoVal,
 };
 
+fn build_milestone_amounts(env: &Env, count: u32, amount_per: i128) -> soroban_sdk::Vec<i128> {
+    let mut amounts = vec![env];
+    for _ in 0..count {
+        amounts.push_back(amount_per);
+    }
+    amounts
+}
+
+fn setup_funded_escrow(
+    env: &Env,
+    milestone_amounts: soroban_sdk::Vec<i128>,
+) -> (
+    Address,
+    Address,
+    Address,
+    Address,
+    Address,
+    soroban_sdk::Address,
+    MilestoneEscrowClient<'_>,
+) {
+    let client_addr = Address::generate(env);
+    let freelancer_addr = Address::generate(env);
+    let arbiter_addr = Address::generate(env);
+    let admin_addr = Address::generate(env);
+
+    let token_contract_id = env
+        .register_stellar_asset_contract_v2(admin_addr.clone())
+        .address();
+    let token_admin = token::StellarAssetClient::new(env, &token_contract_id);
+    let total: i128 = milestone_amounts.iter().sum();
+    token_admin.mint(&client_addr, &total);
+
+    let contract_id = env.register(MilestoneEscrow, ());
+    let client = MilestoneEscrowClient::new(env, &contract_id);
+
+    client.initialize(
+        &admin_addr,
+        &client_addr,
+        &freelancer_addr,
+        &arbiter_addr,
+        &token_contract_id,
+        &604800,
+        &milestone_amounts,
+    );
+    client.fund(&client_addr);
+
+    (
+        client_addr,
+        freelancer_addr,
+        arbiter_addr,
+        admin_addr,
+        token_contract_id,
+        contract_id,
+        client,
+    )
+}
+
 #[test]
 fn test_full_happy_path() {
     let env = Env::default();
@@ -1278,4 +1335,74 @@ fn test_mark_delivered_emits_exactly_one_event() {
     client.mark_delivered(&freelancer_addr, &0u32);
 
     assert_eq!(env.events().all().len(), 1);
+}
+
+#[test]
+fn test_mark_delivered_many_milestones() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let count = 120u32;
+    let amounts = build_milestone_amounts(&env, count, 100);
+    let (_, freelancer_addr, _, _, _, _, client) = setup_funded_escrow(&env, amounts);
+
+    client.mark_delivered(&freelancer_addr, &0u32);
+    client.mark_delivered(&freelancer_addr, &59u32);
+    client.mark_delivered(&freelancer_addr, &(count - 1));
+
+    let job = client.get_job();
+    assert_eq!(job.milestones.len(), count);
+    assert_eq!(
+        job.milestones.get(0).unwrap().status,
+        MilestoneStatus::Delivered
+    );
+    assert_eq!(
+        job.milestones.get(59).unwrap().status,
+        MilestoneStatus::Delivered
+    );
+    assert_eq!(
+        job.milestones.get(count - 1).unwrap().status,
+        MilestoneStatus::Delivered
+    );
+    assert_eq!(
+        job.milestones.get(1).unwrap().status,
+        MilestoneStatus::Pending
+    );
+}
+
+#[test]
+fn test_mark_delivered_gas_scales_sublinearly() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let measure = |count: u32, index: u32| -> u64 {
+        let amounts = build_milestone_amounts(&env, count, 100);
+        let (_, freelancer_addr, _, _, _, _, client) = setup_funded_escrow(&env, amounts);
+        client.mark_delivered(&freelancer_addr, &index);
+        let res = env.cost_estimate().resources();
+        res.read_bytes as u64 + res.write_bytes as u64
+    };
+
+    let small_first = measure(10, 0);
+    let small_last = measure(10, 9);
+    let large_first = measure(120, 0);
+    let large_last = measure(120, 119);
+
+    assert!(
+        large_first < small_first * 3,
+        "first milestone gas grew too much: small={small_first}, large={large_first}"
+    );
+    assert!(
+        large_last < small_last * 3,
+        "last milestone gas grew too much: small={small_last}, large={large_last}"
+    );
+    let large_spread = if large_first > large_last {
+        large_first - large_last
+    } else {
+        large_last - large_first
+    };
+    assert!(
+        large_spread < large_first / 2,
+        "index position should not dominate gas: first={large_first}, last={large_last}"
+    );
 }
