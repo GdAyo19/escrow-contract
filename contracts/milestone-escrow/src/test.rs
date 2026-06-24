@@ -1,6 +1,8 @@
 #![cfg(test)]
 use super::*;
-use soroban_sdk::{testutils::Address as _, testutils::Ledger, vec, Address, Env};
+use soroban_sdk::{
+    testutils::Address as _, testutils::Events, testutils::Ledger, vec, Address, Env, TryIntoVal,
+};
 
 #[test]
 fn test_full_happy_path() {
@@ -1192,4 +1194,88 @@ fn test_time_until_auto_release() {
     });
     let time_remaining3 = client.time_until_auto_release(&0u32);
     assert!(time_remaining3 < 0);
+}
+
+#[test]
+fn test_mark_delivered_emits_delivered_event() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let client_addr = Address::generate(&env);
+    let freelancer_addr = Address::generate(&env);
+    let arbiter_addr = Address::generate(&env);
+    let admin_addr = Address::generate(&env);
+    let token_contract_id = env
+        .register_stellar_asset_contract_v2(admin_addr.clone())
+        .address();
+    let token_admin = token::StellarAssetClient::new(&env, &token_contract_id);
+    token_admin.mint(&client_addr, &5_000);
+
+    let contract_id = env.register(MilestoneEscrow, ());
+    let client = MilestoneEscrowClient::new(&env, &contract_id);
+    let amounts = vec![&env, 5_000_i128];
+    client.initialize(
+        &admin_addr,
+        &client_addr,
+        &freelancer_addr,
+        &arbiter_addr,
+        &token_contract_id,
+        &604800,
+        &amounts,
+    );
+    client.fund(&client_addr);
+
+    env.ledger().with_mut(|li| {
+        li.timestamp = 1_700_000_000;
+    });
+
+    client.mark_delivered(&freelancer_addr, &0u32);
+
+    let events = env.events().all();
+    assert_eq!(events.len(), 1);
+
+    let (emitter, _topics, data) = events.get(0).unwrap();
+    assert_eq!(emitter, contract_id);
+
+    let event: DeliveredEvent = data.try_into_val(&env).unwrap();
+    assert_eq!(event.contract_id, contract_id);
+    assert_eq!(event.milestone_index, 0);
+    assert_eq!(event.freelancer, freelancer_addr);
+    assert_eq!(event.client, client_addr);
+    assert_eq!(event.delivered_at, 1_700_000_000);
+    assert_eq!(event.status, MilestoneStatus::Delivered);
+    assert_eq!(event.amount, 5_000);
+}
+
+#[test]
+fn test_mark_delivered_emits_exactly_one_event() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let client_addr = Address::generate(&env);
+    let freelancer_addr = Address::generate(&env);
+    let arbiter_addr = Address::generate(&env);
+    let admin_addr = Address::generate(&env);
+    let token_contract_id = env
+        .register_stellar_asset_contract_v2(admin_addr.clone())
+        .address();
+    let token_admin = token::StellarAssetClient::new(&env, &token_contract_id);
+    token_admin.mint(&client_addr, &2_000);
+
+    let contract_id = env.register(MilestoneEscrow, ());
+    let client = MilestoneEscrowClient::new(&env, &contract_id);
+    let amounts = vec![&env, 1_000_i128, 1_000_i128];
+    client.initialize(
+        &admin_addr,
+        &client_addr,
+        &freelancer_addr,
+        &arbiter_addr,
+        &token_contract_id,
+        &604800,
+        &amounts,
+    );
+    client.fund(&client_addr);
+    client.mark_delivered(&freelancer_addr, &0u32);
+
+    assert_eq!(env.events().all().len(), 1);
 }
