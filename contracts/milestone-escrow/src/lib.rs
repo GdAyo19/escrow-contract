@@ -482,7 +482,15 @@ impl MilestoneEscrow {
             return Err(Error::Unauthorized);
         }
 
+        if milestone_index >= meta.milestone_count {
+            return Err(Error::InvalidMilestone);
+        }
+
         let mut milestone = Self::load_milestone(&env, milestone_index)?;
+
+        if milestone.amount <= 0 {
+            return Err(Error::InvalidAmount);
+        }
 
         if milestone.status != MilestoneStatus::Delivered
             && milestone.status != MilestoneStatus::PartiallyReleased
@@ -491,15 +499,17 @@ impl MilestoneEscrow {
         }
 
         let remaining = milestone.amount - milestone.released_amount;
-        if remaining > 0 {
-            let token_client = token::Client::new(&env, &meta.token);
-            token_client.transfer(
-                &env.current_contract_address(),
-                &meta.freelancer,
-                &remaining,
-            );
-            milestone.released_amount = milestone.amount;
+        if remaining <= 0 {
+            return Err(Error::InvalidAmount);
         }
+
+        let token_client = token::Client::new(&env, &meta.token);
+        token_client.transfer(
+            &env.current_contract_address(),
+            &meta.freelancer,
+            &remaining,
+        );
+        milestone.released_amount = milestone.amount;
 
         milestone.status = MilestoneStatus::Released;
         Self::store_milestone(&env, milestone_index, &milestone);
