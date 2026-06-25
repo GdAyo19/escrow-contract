@@ -1614,3 +1614,57 @@ fn test_mark_delivered_state_transitions() {
     let result = client2.try_mark_delivered(&freelancer_addr2, &2u32);
     assert_eq!(result, Err(Ok(Error::InvalidStatus)));
 }
+
+#[test]
+fn test_approve_partial_rejects_zero_address() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let client_addr = Address::generate(&env);
+    let freelancer_addr = Address::generate(&env);
+    let arbiter_addr = Address::generate(&env);
+    let admin_addr = Address::generate(&env);
+
+    let token_contract_id = env
+        .register_stellar_asset_contract_v2(admin_addr.clone())
+        .address();
+    let token_admin = token::StellarAssetClient::new(&env, &token_contract_id);
+    token_admin.mint(&client_addr, &10_000);
+
+    let contract_id = env.register(MilestoneEscrow, ());
+    let client = MilestoneEscrowClient::new(&env, &contract_id);
+
+    let amounts = vec![&env, 5_000_i128];
+    client.initialize(
+        &admin_addr,
+        &client_addr,
+        &freelancer_addr,
+        &arbiter_addr,
+        &token_contract_id,
+        &604800,
+        &amounts,
+    );
+    client.fund(&client_addr);
+    client.mark_delivered(&freelancer_addr, &0u32);
+
+    // Test zero address 1
+    let zero_1 = Address::from_string(&soroban_sdk::String::from_str(
+        &env,
+        "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF",
+    ));
+    let result1 = client.try_approve_partial(&zero_1, &0u32, &1_000_i128);
+    assert_eq!(result1, Err(Ok(Error::InvalidAddress)));
+
+    // Test zero address 2
+    let zero_2 = Address::from_string(&soroban_sdk::String::from_str(
+        &env,
+        "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+    ));
+    let result2 = client.try_approve_partial(&zero_2, &0u32, &1_000_i128);
+    assert_eq!(result2, Err(Ok(Error::InvalidAddress)));
+
+    // Test contract's own address
+    let result3 = client.try_approve_partial(&contract_id, &0u32, &1_000_i128);
+    assert_eq!(result3, Err(Ok(Error::InvalidAddress)));
+}
+
