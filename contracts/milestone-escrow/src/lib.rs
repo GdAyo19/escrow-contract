@@ -442,11 +442,27 @@ impl MilestoneEscrow {
         freelancer: Address,
         milestone_index: u32,
     ) -> Result<(), Error> {
+        // Check for zero addresses (both account and contract types)
+        let zero_account = Address::from_str(
+            &env,
+            "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF",
+        );
+        let zero_contract = Address::from_str(
+            &env,
+            "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABSC4",
+        );
+
+        if freelancer == zero_account || freelancer == zero_contract {
+            return Err(Error::InvalidAddress);
+        }
         freelancer.require_auth();
         let meta = Self::load_job_meta(&env)?;
 
         if meta.freelancer != freelancer {
             return Err(Error::Unauthorized);
+        }
+        if !meta.funded {
+            return Err(Error::NotFunded);
         }
 
         let mut milestone = Self::load_milestone(&env, milestone_index)?;
@@ -489,11 +505,27 @@ impl MilestoneEscrow {
         milestone_index: u32,
         amount: i128,
     ) -> Result<(), Error> {
+        // Check for zero addresses (both account and contract types)
+        let zero_account = Address::from_str(
+            &env,
+            "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF",
+        );
+        let zero_contract = Address::from_str(
+            &env,
+            "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABSC4",
+        );
+
+        if client == zero_account || client == zero_contract {
+            return Err(Error::InvalidAddress);
+        }
         client.require_auth();
         let meta = Self::load_job_meta(&env)?;
 
         if meta.client != client {
             return Err(Error::Unauthorized);
+        }
+        if !meta.funded {
+            return Err(Error::NotFunded);
         }
 
         if milestone_index >= meta.milestone_count {
@@ -550,11 +582,27 @@ impl MilestoneEscrow {
     }
 
     pub fn approve_milestone(env: Env, client: Address, milestone_index: u32) -> Result<(), Error> {
+        // Check for zero addresses (both account and contract types)
+        let zero_account = Address::from_str(
+            &env,
+            "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF",
+        );
+        let zero_contract = Address::from_str(
+            &env,
+            "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABSC4",
+        );
+
+        if client == zero_account || client == zero_contract {
+            return Err(Error::InvalidAddress);
+        }
         client.require_auth();
         let meta = Self::load_job_meta(&env)?;
 
         if meta.client != client {
             return Err(Error::Unauthorized);
+        }
+        if !meta.funded {
+            return Err(Error::NotFunded);
         }
 
         if milestone_index >= meta.milestone_count {
@@ -592,11 +640,27 @@ impl MilestoneEscrow {
     }
 
     pub fn raise_dispute(env: Env, caller: Address, milestone_index: u32) -> Result<(), Error> {
+        // Check for zero addresses (both account and contract types)
+        let zero_account = Address::from_str(
+            &env,
+            "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF",
+        );
+        let zero_contract = Address::from_str(
+            &env,
+            "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABSC4",
+        );
+
+        if caller == zero_account || caller == zero_contract {
+            return Err(Error::InvalidAddress);
+        }
         caller.require_auth();
         let meta = Self::load_job_meta(&env)?;
 
         if meta.client != caller && meta.freelancer != caller {
             return Err(Error::Unauthorized);
+        }
+        if !meta.funded {
+            return Err(Error::NotFunded);
         }
 
         let mut milestone = Self::load_milestone(&env, milestone_index)?;
@@ -619,11 +683,27 @@ impl MilestoneEscrow {
         milestone_index: u32,
         release_to_freelancer: bool,
     ) -> Result<(), Error> {
+        // Check for zero addresses (both account and contract types)
+        let zero_account = Address::from_str(
+            &env,
+            "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF",
+        );
+        let zero_contract = Address::from_str(
+            &env,
+            "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABSC4",
+        );
+
+        if arbiter == zero_account || arbiter == zero_contract {
+            return Err(Error::InvalidAddress);
+        }
         arbiter.require_auth();
         let meta = Self::load_job_meta(&env)?;
 
         if meta.arbiter != arbiter {
             return Err(Error::Unauthorized);
+        }
+        if !meta.funded {
+            return Err(Error::NotFunded);
         }
 
         let mut milestone = Self::load_milestone(&env, milestone_index)?;
