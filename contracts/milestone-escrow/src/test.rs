@@ -3210,3 +3210,76 @@ fn test_approve_milestone_after_partial_writes_temporary_released_flag() {
     assert_eq!(token.balance(&freelancer_addr), 10_000);
     assert_eq!(token.balance(&contract_id), 0);
 }
+
+#[test]
+fn test_approve_partial_gas_efficient_with_many_milestones() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let client_addr = Address::generate(&env);
+    let freelancer_addr = Address::generate(&env);
+    let arbiter_addr = Address::generate(&env);
+    let admin_addr = Address::generate(&env);
+
+    let token_contract_id = env
+        .register_stellar_asset_contract_v2(admin_addr.clone())
+        .address();
+    let token = token::Client::new(&env, &token_contract_id);
+    let token_admin = token::StellarAssetClient::new(&env, &token_contract_id);
+
+    let milestone_count = 150u32;
+    let mut milestone_amounts = vec![&env];
+    let mut total = 0_i128;
+    for _ in 0..milestone_count {
+        milestone_amounts.push_back(100_i128);
+        total += 100;
+    }
+    token_admin.mint(&client_addr, &total);
+
+    let contract_id = env.register(MilestoneEscrow, ());
+    let client = MilestoneEscrowClient::new(&env, &contract_id);
+    client.initialize(
+        &admin_addr,
+        &client_addr,
+        &freelancer_addr,
+        &arbiter_addr,
+        &token_contract_id,
+        &604800,
+        &milestone_amounts,
+    );
+    client.fund(&client_addr);
+
+    client.mark_delivered(&freelancer_addr, &75u32);
+
+    client.approve_partial(&client_addr, &75u32, &40_i128);
+
+    let job = client.get_job();
+    let ms = job.milestones.get(75).unwrap();
+    assert_eq!(ms.released_amount, 40);
+    assert_eq!(ms.status, MilestoneStatus::PartiallyReleased);
+
+    let ms0 = job.milestones.get(0).unwrap();
+    assert_eq!(ms0.status, MilestoneStatus::Pending);
+    assert_eq!(ms0.released_amount, 0);
+
+    let ms149 = job.milestones.get(149).unwrap();
+    assert_eq!(ms149.status, MilestoneStatus::Pending);
+    assert_eq!(ms149.released_amount, 0);
+
+    client.approve_partial(&client_addr, &75u32, &60_i128);
+
+    let job2 = client.get_job();
+    let ms_full = job2.milestones.get(75).unwrap();
+    assert_eq!(ms_full.status, MilestoneStatus::Released);
+    assert_eq!(ms_full.released_amount, 100);
+
+    let flag: Option<bool> = env.as_contract(&contract_id, || {
+        env.storage()
+            .temporary()
+            .get(&DataKey::MilestoneReleased(75u32))
+    });
+    assert_eq!(flag, Some(true));
+
+    assert_eq!(token.balance(&freelancer_addr), 100);
+    assert_eq!(token.balance(&contract_id), total - 100);
+}

@@ -612,6 +612,7 @@ impl MilestoneEscrow {
 
         if updated_milestone.released_amount == updated_milestone.amount {
             updated_milestone.status = MilestoneStatus::Released;
+            Self::store_milestone_released(&env, milestone_index);
         } else {
             updated_milestone.status = MilestoneStatus::PartiallyReleased;
         }
