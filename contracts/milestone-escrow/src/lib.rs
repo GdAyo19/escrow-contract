@@ -361,6 +361,11 @@ impl MilestoneEscrow {
             return Err(Error::Unauthorized);
         }
 
+        let meta = Self::load_job_meta(&env)?;
+        if meta.funded {
+            return Err(Error::AlreadyFunded);
+        }
+
         let mut whitelist: Vec<Address> = env
             .storage()
             .persistent()
@@ -408,6 +413,11 @@ impl MilestoneEscrow {
 
         if admin != stored_admin {
             return Err(Error::Unauthorized);
+        }
+
+        let meta = Self::load_job_meta(&env)?;
+        if meta.funded {
+            return Err(Error::AlreadyFunded);
         }
 
         let mut whitelist: Vec<Address> = env
