@@ -902,13 +902,7 @@ impl MilestoneEscrow {
 
         let mut milestone = Self::load_milestone(&env, milestone_index)?;
 
-        if milestone.amount <= 0 {
-            return Err(Error::InvalidAmount);
-        }
-
-        if milestone.status != MilestoneStatus::Delivered
-            && milestone.status != MilestoneStatus::PartiallyReleased
-        {
+        if milestone.status != MilestoneStatus::Delivered {
             return Err(Error::InvalidStatus);
         }
 
